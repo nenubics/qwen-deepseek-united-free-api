@@ -122,6 +122,24 @@ python login.py --status
   python login.py --deepseek --profile account2
   ```
 
+#### 🍪 Auto-Cookie Adding (Zero Manual Setup)
+You can import cookies automatically in any format (Raw HTTP `Cookie:` header, Netscape `cookies.txt`, or JSON array from extensions):
+
+* **1-Click Auto-Scan** (scans your Downloads folder and workspace for exported cookie files):
+  ```bash
+  python login.py --auto-cookies
+  ```
+* **Import from File**:
+  ```bash
+  python login.py --cookie-file ~/Downloads/cookies.txt
+  ```
+* **Paste Raw Cookie String or Header**:
+  ```bash
+  python login.py --add-cookies "userToken=xyz...; ds_session=abc..."
+  ```
+* **Via Dashboard (`/dashboard`)**:
+  Go to the **Accounts & Sessions** tab and use the built-in **Auto-Cookie Importer** (supports direct paste, drag & drop file upload, or the 1-click Auto-Scan button).
+
 ### 4. Start the Server
 
 ```bash

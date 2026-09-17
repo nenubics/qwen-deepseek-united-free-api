@@ -44,6 +44,11 @@ from app.security import (
     install_security,
     openai_error,
 )
+from app.cookie_importer import (
+    apply_cookies,
+    scan_local_cookie_files,
+    auto_import_from_scanned_files,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -414,6 +419,64 @@ async def trigger_deepseek_login(payload: Dict[str, Any] = {}):
 
     asyncio.create_task(_do_login())
     return {"ok": True, "message": "Browser opened for DeepSeek authorization. Please log into chat.deepseek.com in the window."}
+
+
+# =====================================================================
+# AUTO-COOKIE MANAGEMENT ENDPOINTS
+# =====================================================================
+@app.post("/api/cookies/add")
+async def add_cookies_endpoint(payload: Dict[str, Any]):
+    raw_cookies = payload.get("cookies", "").strip()
+    provider = payload.get("provider", "auto").strip().lower()
+    profile = payload.get("profile", "default").strip()
+    label = payload.get("label", "cookie_import").strip()
+
+    if not raw_cookies:
+        raise HTTPException(status_code=400, detail="Cookies content cannot be empty.")
+
+    res = apply_cookies(
+        raw_content=raw_cookies,
+        target_provider=provider,
+        profile_name=profile,
+        label=label,
+    )
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Failed to parse cookies."))
+    return res
+
+
+@app.post("/api/cookies/upload")
+async def upload_cookies_file(
+    file: UploadFile = File(...),
+    provider: str = Form("auto"),
+    profile: str = Form("default"),
+):
+    content_bytes = await file.read()
+    raw_cookies = content_bytes.decode("utf-8", errors="ignore")
+    if not raw_cookies.strip():
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    res = apply_cookies(
+        raw_content=raw_cookies,
+        target_provider=provider,
+        profile_name=profile,
+        label=f"file_{file.filename}",
+    )
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Failed to parse cookies."))
+    return res
+
+
+@app.get("/api/cookies/scan")
+async def scan_cookies_endpoint():
+    files = scan_local_cookie_files()
+    return {"ok": True, "files": files, "count": len(files)}
+
+
+@app.post("/api/cookies/scan-import")
+async def auto_scan_import_endpoint():
+    res = auto_import_from_scanned_files()
+    return res
 
 
 # Global exception handler for OpenAI format

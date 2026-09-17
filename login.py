@@ -215,9 +215,58 @@ def cmd_deepseek_interactive(profile_name: str = "default") -> int:
     return asyncio.run(_run())
 
 
+def cmd_add_cookies(raw_cookies: str, provider: str = "auto", profile: str = "default") -> int:
+    from app.cookie_importer import apply_cookies
+    print(f"\nProcessing cookies (provider={provider})...")
+    res = apply_cookies(raw_cookies, target_provider=provider, profile_name=profile)
+    if not res.get("success"):
+        print(f"FAILED: {res.get('error')}")
+        return 1
+    print(f"SUCCESS: Parsed {res.get('total_parsed_cookies')} cookies!")
+    print(f"Detected provider: {res.get('detected_provider')}")
+    for prov, det in res.get("details", {}).items():
+        print(f"  * {prov}: {det.get('cookie_count')} cookies saved ({det.get('cookie_file') or det.get('account_id') or 'OK'})")
+    return 0
+
+
+def cmd_cookie_file(file_path: str, provider: str = "auto", profile: str = "default") -> int:
+    path = Path(file_path)
+    if not path.exists():
+        print(f"Error: File '{file_path}' does not exist.")
+        return 1
+    content = path.read_text(encoding="utf-8", errors="ignore")
+    return cmd_add_cookies(content, provider=provider, profile=profile)
+
+
+def cmd_auto_cookies() -> int:
+    from app.cookie_importer import scan_local_cookie_files, auto_import_from_scanned_files
+    print("\nScanning local folders (workspace, Downloads, Desktop) for cookie files...")
+    files = scan_local_cookie_files()
+    if not files:
+        print("No cookie export files (.txt, .json) found.")
+        print("Tip: Export cookies using an extension (like 'Get cookies.txt locally' or 'Cookie-Editor')")
+        print("and drop the file into this folder or your Downloads directory.")
+        return 0
+
+    print(f"Found {len(files)} candidate file(s):")
+    for f in files:
+        print(f"  - {f['filename']} ({f['size_bytes']} bytes) -> Provider: {f['detected_provider']}, Cookies: {f['cookie_count']}")
+
+    print("\nAutomatically importing matching cookies...")
+    res = auto_import_from_scanned_files()
+    if res.get("success"):
+        print(f"SUCCESS: {res.get('message')}")
+        for imp in res.get("files", []):
+            print(f"  * Imported '{imp['file']}' for {imp['provider']}")
+        return 0
+    else:
+        print(f"Notice: {res.get('message')}")
+        return 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Unified Qwen + DeepSeek API Authentication CLI",
+        description="Unified Qwen + DeepSeek API Authentication & Cookie CLI",
         formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument("--status", action="store_true", help="Display status of all Qwen accounts and DeepSeek profiles")
@@ -226,6 +275,10 @@ def main() -> int:
     parser.add_argument("--qwen-token", type=str, metavar="TOKEN", help="Save a Qwen Bearer JWT token directly")
     parser.add_argument("--deepseek", "--deepseek-login", action="store_true", help="Interactive browser login for DeepSeek")
     parser.add_argument("--profile", type=str, default="default", help="DeepSeek profile name (default: 'default')")
+    parser.add_argument("--add-cookies", type=str, metavar="COOKIES", help="Add raw cookies (HTTP header string, Netscape, or JSON)")
+    parser.add_argument("--cookie-file", type=str, metavar="PATH", help="Import cookies from a cookies.txt or cookies.json file")
+    parser.add_argument("--auto-cookies", action="store_true", help="Scan Downloads and workspace for cookie files and auto-import")
+    parser.add_argument("--target", type=str, default="auto", choices=["auto", "deepseek", "qwen", "both"], help="Target provider for cookies (default: auto)")
 
     args = parser.parse_args()
 
@@ -233,6 +286,12 @@ def main() -> int:
         return cmd_status()
     elif args.list_models:
         return cmd_list_models()
+    elif args.auto_cookies:
+        return cmd_auto_cookies()
+    elif args.cookie_file:
+        return cmd_cookie_file(args.cookie_file, provider=args.target, profile=args.profile)
+    elif args.add_cookies:
+        return cmd_add_cookies(args.add_cookies, provider=args.target, profile=args.profile)
     elif args.qwen_token:
         return cmd_qwen_token(args.qwen_token)
     elif args.qwen:

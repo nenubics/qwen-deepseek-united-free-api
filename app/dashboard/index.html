@@ -297,6 +297,53 @@
         </div>
       </div>
     </div>
+
+    <!-- 🍪 AUTO-COOKIE ADDING & SESSION SYNC -->
+    <div class="card" style="margin-top:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div>
+          <h2 style="margin:0;">🍪 Auto-Cookie Importer & Session Sync</h2>
+          <p style="color:var(--muted); font-size:12px; margin:4px 0 0 0;">
+            Paste cookies in any format (Raw HTTP Header, Netscape <code>cookies.txt</code>, or JSON) or 1-click scan your machine.
+          </p>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button onclick="triggerAutoScanCookies()" class="sm" id="btnAutoScan">🔍 1-Click Auto-Scan (Downloads & Workspace)</button>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:16px;">
+        <!-- Left: Paste Area -->
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <label style="font-size:12px; font-weight:600; color:var(--text);">Paste Cookies / Header / JSON:</label>
+          <textarea id="cookiePasteInput" placeholder="Paste:&#10;- Raw HTTP header: Cookie: userToken=xyz...; ds_session=abc...&#10;- Netscape cookies.txt format&#10;- JSON format from Cookie-Editor extension" style="height:120px; font-family:monospace; font-size:11px; resize:vertical;"></textarea>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <select id="cookieTargetProvider" style="font-size:12px; padding:6px 10px;">
+              <option value="auto">Auto Detect Provider</option>
+              <option value="deepseek">DeepSeek Only</option>
+              <option value="qwen">Qwen Only</option>
+              <option value="both">Both Providers</option>
+            </select>
+            <button onclick="submitPasteCookies()" class="primary sm" id="btnApplyCookies">Apply Cookies</button>
+          </div>
+        </div>
+
+        <!-- Right: Drag & Drop / File Upload -->
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <label style="font-size:12px; font-weight:600; color:var(--text);">Or Upload cookies.txt / cookies.json:</label>
+          <div id="cookieDropZone" style="border: 2px dashed var(--border); border-radius:8px; padding:24px 16px; text-align:center; background:var(--bg); cursor:pointer;" onclick="document.getElementById('cookieFileInput').click()">
+            <div style="font-size:24px; margin-bottom:6px;">📁</div>
+            <p style="margin:0; font-size:12px; color:var(--text); font-weight:600;">Click to browse or drop cookies file here</p>
+            <p style="margin:4px 0 0 0; font-size:11px; color:var(--muted);">Supports .txt (Netscape) and .json formats</p>
+            <input type="file" id="cookieFileInput" style="display:none;" onchange="handleCookieFileSelect(event)" accept=".txt,.json" />
+          </div>
+          <p style="color:var(--muted); font-size:11px; margin:4px 0 0 0;">
+            💡 <b>How to get cookies</b>: Use Chrome extensions <i>"Get cookies.txt locally"</i> or <i>"Cookie-Editor"</i> while visiting <code>chat.deepseek.com</code> or <code>chat.qwen.ai</code>.
+          </p>
+        </div>
+      </div>
+      <div id="cookieImportResult" style="margin-top:12px; font-size:12px; display:none;"></div>
+    </div>
   </div>
 
   <!-- TAB 4: MODELS CATALOG -->
@@ -641,6 +688,111 @@ async function deleteQwenAccount(id) {
   } catch (e) {
     showToast(e.message, true);
   }
+}
+
+// Auto-Cookie Importer JS
+async function submitPasteCookies() {
+  const text = document.getElementById("cookiePasteInput").value.trim();
+  const provider = document.getElementById("cookieTargetProvider").value;
+  if (!text) {
+    showToast("Please paste cookies or cookie header first", true);
+    return;
+  }
+
+  const btn = document.getElementById("btnApplyCookies");
+  btn.disabled = true;
+  btn.innerText = "Applying...";
+
+  try {
+    const res = await fetch("/api/cookies/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cookies: text, provider: provider })
+    });
+    const d = await res.json();
+    if (res.ok && d.success) {
+      showToast(`Applied ${d.total_parsed_cookies} cookies (${d.detected_provider})!`);
+      document.getElementById("cookiePasteInput").value = "";
+      renderCookieResult(`✅ Success: Imported ${d.total_parsed_cookies} cookies for ${d.detected_provider}.`);
+      loadStatus();
+    } else {
+      showToast(d.detail || d.error || "Failed to apply cookies", true);
+      renderCookieResult(`❌ Error: ${d.detail || d.error || "Failed"}`, true);
+    }
+  } catch (e) {
+    showToast(e.message, true);
+    renderCookieResult(`❌ Network Error: ${e.message}`, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerText = "Apply Cookies";
+  }
+}
+
+async function handleCookieFileSelect(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const provider = document.getElementById("cookieTargetProvider").value;
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("provider", provider);
+
+  showToast(`Uploading ${file.name}...`);
+
+  try {
+    const res = await fetch("/api/cookies/upload", {
+      method: "POST",
+      body: formData
+    });
+    const d = await res.json();
+    if (res.ok && d.success) {
+      showToast(`File ${file.name} imported: ${d.total_parsed_cookies} cookies!`);
+      renderCookieResult(`✅ File ${file.name} imported: ${d.total_parsed_cookies} cookies (${d.detected_provider}).`);
+      loadStatus();
+    } else {
+      showToast(d.detail || d.error || "Upload failed", true);
+      renderCookieResult(`❌ Error: ${d.detail || d.error || "Upload failed"}`, true);
+    }
+  } catch (e) {
+    showToast(e.message, true);
+  } finally {
+    event.target.value = "";
+  }
+}
+
+async function triggerAutoScanCookies() {
+  const btn = document.getElementById("btnAutoScan");
+  btn.disabled = true;
+  btn.innerText = "Scanning...";
+
+  try {
+    const res = await fetch("/api/cookies/scan-import", { method: "POST" });
+    const d = await res.json();
+    if (d.success) {
+      showToast(d.message);
+      renderCookieResult(`✅ ${d.message}`);
+      loadStatus();
+    } else {
+      showToast(d.message || "No matching cookie files found", true);
+      renderCookieResult(`ℹ️ ${d.message}`);
+    }
+  } catch (e) {
+    showToast(e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerText = "🔍 1-Click Auto-Scan (Downloads & Workspace)";
+  }
+}
+
+function renderCookieResult(msg, isErr = false) {
+  const el = document.getElementById("cookieImportResult");
+  if (!el) return;
+  el.style.display = "block";
+  el.style.padding = "8px 12px";
+  el.style.borderRadius = "6px";
+  el.style.background = isErr ? "rgba(239, 68, 68, 0.15)" : "rgba(34, 197, 94, 0.15)";
+  el.style.color = isErr ? "var(--err)" : "var(--ok)";
+  el.innerHTML = msg;
 }
 
 async function loadModels() {
