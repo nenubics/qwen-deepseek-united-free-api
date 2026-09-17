@@ -304,7 +304,13 @@ async def stream_qwen_openai_format(
             }, ensure_ascii=False) + "\n\n"
 
         result = await task
-        if not result.get("success"):
+        if result.get("success"):
+            try:
+                from app.chat_manager import chat_manager
+                chat_manager.record_turn(chat_id, new_parent_id=result.get("response_id"))
+            except Exception as e:
+                logger.warning(f"Failed to record turn for Qwen chat {chat_id}: {e}")
+        elif not result.get("success"):
             if not has_streamed:
                 err_text = f"Error: {result.get('error', 'Qwen API Error')}"
                 yield "data: " + json.dumps({
@@ -329,6 +335,8 @@ async def stream_qwen_openai_format(
             "created": int(time.time()),
             "model": model,
             "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+            "conversation_id": chat_id,
+            "chatId": chat_id,
         }, ensure_ascii=False) + "\n\n"
         yield "data: [DONE]\n\n"
     finally:

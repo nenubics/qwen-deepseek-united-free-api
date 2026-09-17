@@ -99,7 +99,8 @@ def install_security(app: FastAPI, limiter: Optional[SlidingWindowLimiter] = Non
             # Only enforce on /v1/*, /api/chat/*, /api/images/*, /api/videos/*, /api/models, etc.
             is_protected_api = (
                 path.startswith("/v1/")
-                or path.startswith("/api/chat")
+                or path == "/api/chat"
+                or path.startswith("/api/chat/")
                 or path.startswith("/api/models")
                 or path.startswith("/api/images")
                 or path.startswith("/api/videos")

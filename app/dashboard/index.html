@@ -143,6 +143,7 @@
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="switchTab('overview')">📊 Overview &amp; Setup</button>
     <button class="nav-tab" onclick="switchTab('playground')">💬 Interactive Chat</button>
+    <button class="nav-tab" onclick="switchTab('tasks')">📑 Tasks &amp; Chats</button>
     <button class="nav-tab" onclick="switchTab('accounts')">👥 Accounts &amp; Sessions</button>
     <button class="nav-tab" onclick="switchTab('models')">📋 Models Catalog</button>
     <button class="nav-tab" onclick="switchTab('settings')">🔑 API Key &amp; Settings</button>
@@ -243,6 +244,19 @@
         </div>
       </div>
 
+      <!-- Thread / Task Context Bar -->
+      <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.25); border:1px solid var(--border); border-radius:6px; padding:7px 12px; margin-top:10px; font-size:12px; flex-wrap:wrap; gap:8px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="color:var(--muted);">🧵 Current Thread:</span>
+          <span id="playgroundActiveTaskTitle" style="font-weight:600; color:var(--accent);">Auto (Affinity matches by task/theme)</span>
+          <span id="playgroundActiveTaskTurns" class="badge" style="background:rgba(255,255,255,0.06); color:var(--muted); font-size:11px;">0 turns</span>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button onclick="startNewTaskTopic()" class="sm primary" title="Starts a brand new upstream chat session for next prompts">➕ New Task / Topic</button>
+          <button onclick="switchTab('tasks')" class="sm" title="View all managed chat sessions">📑 View All Tasks</button>
+        </div>
+      </div>
+
       <div class="chat-messages" id="chatMessages">
         <div class="chat-msg assistant">
           <div class="meta"><span>ASSISTANT</span></div>
@@ -256,6 +270,28 @@
           <button onclick="sendChatMessage()" id="btnSendChat" class="primary" style="height:52px; padding:0 20px;">Send</button>
           <button onclick="stopChatStream()" id="btnStopChat" class="danger" style="height:52px; display:none;">Stop</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: UNIFIED TASKS & CHATS -->
+  <div id="tab-tasks" class="tab-pane">
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div>
+          <h2 style="margin:0;">📑 Unified Task &amp; Chat Management</h2>
+          <p style="color:var(--muted); font-size:12px; margin:4px 0 0 0;">
+            Prompts and system instructions sharing the same task/theme automatically remain in <strong>1 unified chat thread</strong> on Qwen / DeepSeek.
+          </p>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button onclick="startNewTaskTopic()" class="primary sm">➕ Start New Task (Reset Active)</button>
+          <button onclick="loadManagedChats()" class="sm">🔄 Refresh</button>
+        </div>
+      </div>
+
+      <div id="managedChatsList" style="margin-top:16px;">
+        Loading managed tasks...
       </div>
     </div>
   </div>
@@ -457,10 +493,21 @@ function showToast(msg, isErr = false) {
 }
 
 function switchTab(tabId) {
-  document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".nav-tab").forEach(t => {
+    t.classList.remove("active");
+    if (t.getAttribute("onclick") && t.getAttribute("onclick").includes(`'${tabId}'`)) {
+      t.classList.add("active");
+    }
+  });
   document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
-  event.currentTarget.classList.add("active");
-  document.getElementById("tab-" + tabId).classList.add("active");
+  const target = document.getElementById("tab-" + tabId);
+  if (target) target.classList.add("active");
+  if (tabId === "tasks") loadManagedChats();
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 async function loadStatus() {
@@ -486,6 +533,7 @@ async function loadStatus() {
     renderQwenAccounts(data.qwen.accounts || []);
     renderDeepSeekSessions(dsPool);
     showSnippet("openwebui");
+    loadManagedChats();
   } catch (err) {
     document.getElementById("statusDot").className = "dot off";
     document.getElementById("statusText").innerText = "Offline";
@@ -998,6 +1046,7 @@ async function sendChatMessage() {
     document.getElementById("btnSendChat").style.display = "inline-flex";
     document.getElementById("btnStopChat").style.display = "none";
     activeChatAbort = null;
+    loadManagedChats();
   }
 }
 
@@ -1078,10 +1127,156 @@ async function generateImage() {
   }
 }
 
+// Unified Chat & Task Management
+async function loadManagedChats() {
+  const container = document.getElementById("managedChatsList");
+  try {
+    const headers = {};
+    if (currentApiKey) headers["Authorization"] = `Bearer ${currentApiKey}`;
+    const res = await fetch("/api/chats", { headers });
+    const data = await res.json();
+    const chats = data.chats || [];
+
+    // Update active thread banner in playground
+    const active = chats.find(c => c.is_active === 1);
+    const pgTitle = document.getElementById("playgroundActiveTaskTitle");
+    const pgTurns = document.getElementById("playgroundActiveTaskTurns");
+    if (pgTitle && pgTurns) {
+      if (active) {
+        pgTitle.innerText = active.title || "Untitled Task";
+        pgTurns.innerText = (active.message_count || 1) + " turn(s) [" + active.provider.toUpperCase() + "]";
+        pgTurns.style.display = "inline-flex";
+      } else {
+        pgTitle.innerText = "Auto (Task affinity matches by theme)";
+        pgTurns.innerText = "0 turns";
+      }
+    }
+
+    if (!container) return;
+
+    if (!chats.length) {
+      container.innerHTML = `
+        <div style="padding:30px; text-align:center; color:var(--muted); background:var(--bg); border:1px dashed var(--border); border-radius:8px;">
+          <div style="font-size:24px; margin-bottom:8px;">🧵</div>
+          <p style="margin:0; font-weight:600; color:var(--text);">No managed tasks yet</p>
+          <p style="margin:4px 0 0 0; font-size:12px;">Start a conversation in Interactive Chat or via client API, and tasks will automatically be grouped here!</p>
+        </div>
+      `;
+      return;
+    }
+
+    let html = `
+      <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:12px; text-align:left;">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border); color:var(--muted);">
+            <th style="padding:10px;">Status</th>
+            <th style="padding:10px;">Topic / Theme</th>
+            <th style="padding:10px;">Provider</th>
+            <th style="padding:10px;">Model</th>
+            <th style="padding:10px;">Turns</th>
+            <th style="padding:10px;">Upstream Chat ID</th>
+            <th style="padding:10px;">Last Activity</th>
+            <th style="padding:10px; text-align:right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    for (const c of chats) {
+      const isActive = c.is_active === 1;
+      const statusBadge = isActive
+        ? `<span class="badge ok">Active Thread</span>`
+        : `<span class="badge" style="background:rgba(255,255,255,0.06); color:var(--faint);">Idle</span>`;
+      const provBadge = c.provider === "qwen"
+        ? `<span class="badge qwen">Qwen</span>`
+        : `<span class="badge deepseek">DeepSeek</span>`;
+      const timeAgo = Math.max(0, Math.floor(Date.now() / 1000 - c.updated_at));
+      const timeStr = timeAgo < 60 ? `${timeAgo}s ago` : `${Math.floor(timeAgo/60)}m ago`;
+      const shortChatId = c.chat_id.length > 14 ? c.chat_id.slice(0, 8) + '...' + c.chat_id.slice(-4) : c.chat_id;
+
+      html += `
+        <tr style="border-bottom:1px solid var(--border); background:${isActive ? 'rgba(56,189,248,0.04)' : 'transparent'};">
+          <td style="padding:10px;">${statusBadge}</td>
+          <td style="padding:10px; font-weight:600; color:var(--text); max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(c.title)}">
+            ${escapeHtml(c.title)}
+          </td>
+          <td style="padding:10px;">${provBadge}</td>
+          <td style="padding:10px; font-family:var(--mono);">${escapeHtml(c.model)}</td>
+          <td style="padding:10px; font-weight:700;">${c.message_count}</td>
+          <td style="padding:10px; font-family:var(--mono); color:var(--muted);" title="${c.chat_id}">
+            <code>${shortChatId}</code>
+          </td>
+          <td style="padding:10px; color:var(--muted);">${timeStr}</td>
+          <td style="padding:10px; text-align:right; white-space:nowrap;">
+            ${isActive ? '' : `<button onclick="activateManagedTask('${c.id}')" class="sm primary" style="margin-right:6px;">Resume</button>`}
+            <button onclick="deleteManagedTask('${c.id}')" class="sm danger">Delete</button>
+          </td>
+        </tr>
+      `;
+    }
+
+    html += `</tbody></table></div>`;
+    container.innerHTML = html;
+  } catch (e) {
+    if (container) {
+      container.innerHTML = `<span style="color:var(--err)">Failed to load managed tasks: ${e.message}</span>`;
+    }
+  }
+}
+
+async function startNewTaskTopic() {
+  try {
+    const headers = {};
+    if (currentApiKey) headers["Authorization"] = `Bearer ${currentApiKey}`;
+    const res = await fetch("/api/chats/new", { method: "POST", headers });
+    const data = await res.json();
+    clearChat();
+    await loadManagedChats();
+    showToast("✨ Started new task session. Next prompt will begin a fresh upstream chat thread!");
+  } catch (e) {
+    showToast("Failed to reset active task: " + e.message, true);
+  }
+}
+
+async function activateManagedTask(id) {
+  try {
+    const headers = {};
+    if (currentApiKey) headers["Authorization"] = `Bearer ${currentApiKey}`;
+    const res = await fetch(`/api/chats/${id}/active`, { method: "POST", headers });
+    const data = await res.json();
+    if (data.ok) {
+      showToast("🧵 Resumed task thread in active state.");
+      await loadManagedChats();
+      switchTab("playground");
+    }
+  } catch (e) {
+    showToast("Failed to activate task: " + e.message, true);
+  }
+}
+
+async function deleteManagedTask(id) {
+  if (!confirm("Are you sure you want to remove this managed chat from registry?")) return;
+  try {
+    const headers = {};
+    if (currentApiKey) headers["Authorization"] = `Bearer ${currentApiKey}`;
+    const res = await fetch(`/api/chats/${id}`, { method: "DELETE", headers });
+    const data = await res.json();
+    if (data.ok) {
+      showToast("Task deleted.");
+      await loadManagedChats();
+    }
+  } catch (e) {
+    showToast("Failed to delete task: " + e.message, true);
+  }
+}
+
 // Initial initialization
 loadStatus();
 loadModels();
+loadManagedChats();
 setInterval(loadStatus, 15000);
+setInterval(loadManagedChats, 15000);
 </script>
 </body>
 </html>

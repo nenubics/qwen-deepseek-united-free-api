@@ -245,6 +245,45 @@ async def deepseek_stop_generation():
 
 
 # =====================================================================
+# CHAT & TASK THREAD MANAGEMENT
+# =====================================================================
+@app.get("/api/chats")
+@app.get("/v1/chats")
+async def list_managed_chats(limit: int = 30):
+    """Lists all intelligent managed chat sessions across Qwen and DeepSeek."""
+    from app.chat_manager import chat_manager
+    chats = chat_manager.list_chats(limit=limit)
+    return {"ok": True, "chats": chats, "count": len(chats)}
+
+
+@app.post("/api/chats/new")
+@app.post("/v1/chats/new")
+async def reset_active_chats():
+    """Resets active thread affinity so the next prompt starts a fresh chat thread."""
+    from app.chat_manager import chat_manager
+    count = chat_manager.reset_all_active()
+    return {"ok": True, "reset_count": count, "message": "All active task affinities reset. Next prompt will start a new chat thread."}
+
+
+@app.post("/api/chats/{task_id}/active")
+async def set_active_chat(task_id: str):
+    """Sets an existing task thread as the active thread."""
+    from app.chat_manager import chat_manager
+    success = chat_manager.set_active(task_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Task or chat not found.")
+    return {"ok": True, "task_id": task_id, "message": "Task thread activated."}
+
+
+@app.delete("/api/chats/{task_id}")
+async def delete_managed_chat(task_id: str):
+    """Deletes a managed chat session from registry."""
+    from app.chat_manager import chat_manager
+    success = chat_manager.delete_chat(task_id)
+    return {"ok": success}
+
+
+# =====================================================================
 # QWEN MEDIA & IMAGE GENERATION
 # =====================================================================
 @app.post("/v1/images/generations")

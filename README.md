@@ -295,6 +295,28 @@ curl -X POST http://localhost:8000/v1/images/generations \
 
 ---
 
+## 🧵 Intelligent Chat & Task Management (1 Chat per Task/Theme)
+
+In traditional OpenAI proxies, follow-up messages cause massive chat fragmentation: because standard OpenAI `/v1/chat/completions` clients send full message history without passing upstream conversation IDs, the backend would create a brand new chat on `chat.qwen.ai` and `chat.deepseek.com` on every single turn.
+
+This service introduces **Intelligent Task & Chat Affinity**:
+
+* 🎯 **Theme & Task Fingerprinting**: System prompts and follow-up prompts sharing the same core task are hashed into a persistent fingerprint (`task_hash`). Follow-up questions automatically continue in the **exact same upstream chat thread**.
+* 🔄 **Upstream Conversation State**:
+  * **Qwen**: Retains the `chat_id` and advances `parent_id` (the `response_id` of previous assistant answers), keeping conversations neatly organized on `chat.qwen.ai`.
+  * **DeepSeek**: Locks the browser automation page to the persistent chat session URL (`/a/chat/s/{chat_id}`), appending turns directly to the existing thread on `chat.deepseek.com`.
+* ➕ **Explicit New Chat Control**:
+  * Pass `"new_chat": true` (or `"newChat": true`) in your completion request payload to deliberately begin a clean thread.
+  * Send `X-Conversation-Id: <ID>` or pass `"conversation_id": "<ID>"` to explicitly target a thread.
+* 🖥️ **Dashboard & REST Management**:
+  * `GET /api/chats`: Inspect all active managed chat threads, turn counters, upstream chat IDs, and last activity timestamps.
+  * `POST /api/chats/new`: 1-click reset of active task affinity.
+  * `POST /api/chats/{task_id}/active`: Reactivate an older thread.
+  * `DELETE /api/chats/{task_id}`: Remove thread from registry.
+  * **Interactive Chat Playground**: Features a live `🧵 Current Thread` indicator and a `➕ New Task / Topic` button.
+
+---
+
 ## 📊 Modern Dashboard Overview
 
 Navigate to `http://localhost:8000/dashboard` to access:

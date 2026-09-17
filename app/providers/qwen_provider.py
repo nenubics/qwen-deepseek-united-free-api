@@ -103,11 +103,31 @@ async def handle_qwen_completions(
     message_content = _normalize_message_content(user_msg_obj.content)
     files = request.files or []
 
-    chat_id, parent_id = _extract_chat_and_parent_ids(request)
-    if not chat_id:
-        chat_id = await create_qwen_chat(token_info, mapped_model)
+    # Chat & Task Management: Reuse existing thread for the same task/theme
+    from app.chat_manager import chat_manager
+    existing_chat = chat_manager.resolve_chat(
+        request, provider="qwen", http_headers=dict(http_request.headers)
+    )
+
+    if existing_chat:
+        chat_id = existing_chat["chat_id"]
+        parent_id = existing_chat.get("parent_id")
+        logger.info(
+            f"Continuing in existing Qwen chat {chat_id} (turn {existing_chat.get('message_count', 1) + 1}, parent: {parent_id}) for task '{existing_chat.get('title')}'"
+        )
+    else:
+        chat_id, parent_id = _extract_chat_and_parent_ids(request)
         if not chat_id:
-            raise HTTPException(status_code=502, detail="Failed to create Qwen conversation session.")
+            chat_id = await create_qwen_chat(token_info, mapped_model)
+            if not chat_id:
+                raise HTTPException(status_code=502, detail="Failed to create Qwen conversation session.")
+            chat_manager.register_chat(
+                chat_id=chat_id,
+                provider="qwen",
+                model=mapped_model,
+                messages=request.messages,
+                parent_id=None,
+            )
 
     payload = build_qwen_payload(
         message_content=message_content,
@@ -127,6 +147,8 @@ async def handle_qwen_completions(
             "Expires": "0",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            "X-Chat-Id": chat_id,
+            "X-Conversation-Id": chat_id,
         }
         return StreamingResponse(
             stream_qwen_openai_format(token_info, chat_id, payload, mapped_model),
@@ -146,6 +168,11 @@ async def handle_qwen_completions(
         )
 
     resp_parent_id = result.get("response_id") or parent_id
+    try:
+        chat_manager.record_turn(chat_id, new_parent_id=resp_parent_id)
+    except Exception as e:
+        logger.warning(f"Failed to record turn for Qwen chat {chat_id}: {e}")
+
     usage_dict = result.get("usage") or {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
     return ChatCompletionResponse(

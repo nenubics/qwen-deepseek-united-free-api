@@ -561,6 +561,16 @@ async def handle_deepseek_completions(
     if not request.regenerate and request.edit is None and not request.messages:
         raise HTTPException(status_code=400, detail="The 'messages' field is required.")
 
+    from app.chat_manager import chat_manager
+    existing_chat = chat_manager.resolve_chat(
+        request, provider="deepseek", http_headers=dict(http_request.headers)
+    )
+    if existing_chat:
+        request.conversation_id = existing_chat["chat_id"]
+        logger.info(
+            f"Continuing in existing DeepSeek chat {request.conversation_id} (turn {existing_chat.get('message_count', 1) + 1}) for task '{existing_chat.get('title')}'"
+        )
+
     try:
         sess = await session_pool.acquire(timeout=settings.REQUEST_QUEUE_TIMEOUT)
     except PoolExhaustedError as exc:
@@ -591,26 +601,12 @@ async def handle_deepseek_completions(
             system_msgs = [m for m in msgs if m.role == "system"]
             system_text = system_msgs[-1].content if system_msgs else ""
             last_user = _extract_last_user_message(msgs)
-            mode = settings.MEMORY_MODE
+            file_paths = _save_images_to_tmp(last_user)
 
-            if mode == "client":
-                conv = await _maybe_summarize(_flatten_conversation(msgs))
-                tool_instr = _build_tool_instruction(tools) if tools else ""
-                sys_part = system_text
-                if tool_instr:
-                    sys_part = (sys_part + "\n\n" + tool_instr).strip() if sys_part else tool_instr
-                prompt = settings.SYSTEM_PROMPT_TEMPLATE.format(system=sys_part, user=conv) if sys_part else conv
-                file_paths = _save_images_to_tmp(last_user)
-                await sess.new_chat()
-                async for kind, delta in sess.stream_message(
-                    prompt,
-                    file_paths,
-                    deep_think=eff_deep_think,
-                    search=eff_search,
-                    chat_id=None,
-                ):
-                    yield kind, delta
-            else:
+            is_continuing = bool(existing_chat or request.conversation_id)
+
+            if is_continuing and not request.new_chat:
+                # Continuing an existing managed thread on DeepSeek
                 last = _last_significant_message(msgs)
                 tool_instr = _build_tool_instruction(tools) if tools else ""
                 if last and last.role == "tool":
@@ -619,14 +615,44 @@ async def handle_deepseek_completions(
                         prompt = settings.SYSTEM_PROMPT_TEMPLATE.format(system=tool_instr, user=prompt)
                 else:
                     prompt = last_user.get_text_content() if hasattr(last_user, "get_text_content") else (last_user.content if isinstance(last_user.content, str) else "")
+                    if tool_instr:
+                        prompt = settings.SYSTEM_PROMPT_TEMPLATE.format(system=tool_instr, user=prompt)
+
+                async for kind, delta in sess.stream_message(
+                    prompt,
+                    file_paths,
+                    deep_think=eff_deep_think,
+                    search=eff_search,
+                    chat_id=request.conversation_id,
+                ):
+                    yield kind, delta
+            else:
+                # New chat session or explicit new_chat requested
+                if request.new_chat:
+                    await sess.new_chat()
+
+                mode = settings.MEMORY_MODE
+                if mode == "client":
+                    conv = await _maybe_summarize(_flatten_conversation(msgs))
+                    tool_instr = _build_tool_instruction(tools) if tools else ""
+                    sys_part = system_text
+                    if tool_instr:
+                        sys_part = (sys_part + "\n\n" + tool_instr).strip() if sys_part else tool_instr
+                    prompt = settings.SYSTEM_PROMPT_TEMPLATE.format(system=sys_part, user=conv) if sys_part else conv
+                else:
+                    last = _last_significant_message(msgs)
+                    tool_instr = _build_tool_instruction(tools) if tools else ""
+                    if last and last.role == "tool":
+                        prompt = "[tool result]\n" + (last.content if isinstance(last.content, str) else "")
+                    else:
+                        prompt = last_user.get_text_content() if hasattr(last_user, "get_text_content") else (last_user.content if isinstance(last_user.content, str) else "")
+                    
                     sys_part = system_text
                     if tool_instr:
                         sys_part = (sys_part + "\n\n" + tool_instr).strip() if sys_part else tool_instr
                     if sys_part:
                         prompt = settings.SYSTEM_PROMPT_TEMPLATE.format(system=sys_part, user=prompt)
-                file_paths = _save_images_to_tmp(last_user)
-                if request.new_chat:
-                    await sess.new_chat()
+
                 async for kind, delta in sess.stream_message(
                     prompt,
                     file_paths,
@@ -730,6 +756,21 @@ async def handle_deepseek_completions(
 
                 total_tokens, ds_counter = await _finalize_usage(prompt_tokens, completion_tokens)
                 conv_id = await sess.get_current_chat_id()
+                if conv_id:
+                    try:
+                        if existing_chat:
+                            chat_manager.record_turn(conv_id)
+                        else:
+                            chat_manager.register_chat(
+                                chat_id=conv_id,
+                                provider="deepseek",
+                                model=request.model or "deepseek-chat",
+                                messages=request.messages,
+                                parent_id=None,
+                            )
+                    except Exception as e:
+                        logger.warning(f"Failed to track DeepSeek chat {conv_id} in chat_manager: {e}")
+
                 citations = []
                 if eff_search:
                     try:
@@ -885,6 +926,20 @@ async def handle_deepseek_completions(
         completion_tokens = _estimate_tokens(response_text)
         total_tokens, ds_counter = await _finalize_usage(prompt_tokens, completion_tokens)
         conv_id = await sess.get_current_chat_id()
+        if conv_id:
+            try:
+                if existing_chat:
+                    chat_manager.record_turn(conv_id)
+                else:
+                    chat_manager.register_chat(
+                        chat_id=conv_id,
+                        provider="deepseek",
+                        model=request.model or "deepseek-chat",
+                        messages=request.messages,
+                        parent_id=None,
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to track DeepSeek chat {conv_id} in chat_manager: {e}")
 
         citations = []
         if eff_search:
