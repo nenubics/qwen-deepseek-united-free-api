@@ -436,23 +436,54 @@ def _parse_tool_call(text: str, tools: Optional[List[Any]]):
 
 def _save_images_to_tmp(message: ChatMessage) -> List[str]:
     import base64
+    import httpx
     paths: List[str] = []
     if not message.images:
         return paths
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="chat_upload_"))
     for i, image in enumerate(message.images):
-        if image.type == "image_path":
-            paths.append(image.value)
-        elif image.type == "image_base64":
+        val = image.value.strip()
+        if image.type == "image_path" or (not val.startswith("http") and not val.startswith("data:") and os.path.exists(val)):
+            paths.append(val)
+        elif image.type == "image_base64" or (val.startswith("data:image/") and ";base64," in val):
             file_path = tmp_dir / f"image_{i}.png"
-            file_path.write_bytes(base64.b64decode(image.value))
-            paths.append(str(file_path))
-        elif image.type == "image_url":
-            raise HTTPException(
-                status_code=400,
-                detail="image_url is not supported directly for DeepSeek. Provide image_base64 or image_path.",
-            )
+            raw_b64 = val.partition(";base64,")[2] if ";base64," in val else val
+            try:
+                file_path.write_bytes(base64.b64decode(raw_b64))
+                paths.append(str(file_path))
+            except Exception as e:
+                logger.warning(f"Failed to decode base64 image: {e}")
+        elif image.type == "image_url" or val.startswith(("http://", "https://")):
+            if val.startswith("data:image/"):
+                file_path = tmp_dir / f"image_{i}.png"
+                raw_b64 = val.partition(";base64,")[2]
+                try:
+                    file_path.write_bytes(base64.b64decode(raw_b64))
+                    paths.append(str(file_path))
+                except Exception as e:
+                    logger.warning(f"Failed to decode data-uri image: {e}")
+            else:
+                # Download remote HTTP/HTTPS image to temp file
+                try:
+                    with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+                        resp = client.get(val)
+                        if resp.status_code == 200:
+                            ext = "png"
+                            ct = resp.headers.get("content-type", "").lower()
+                            if "jpeg" in ct or "jpg" in ct:
+                                ext = "jpg"
+                            elif "webp" in ct:
+                                ext = "webp"
+                            elif "gif" in ct:
+                                ext = "gif"
+                            file_path = tmp_dir / f"image_{i}.{ext}"
+                            file_path.write_bytes(resp.content)
+                            paths.append(str(file_path))
+                        else:
+                            logger.warning(f"Failed to download image from {val}: HTTP {resp.status_code}")
+                except Exception as e:
+                    logger.warning(f"Error downloading image from {val}: {e}")
     return paths
 
 
@@ -587,7 +618,7 @@ async def handle_deepseek_completions(
                     if tool_instr:
                         prompt = settings.SYSTEM_PROMPT_TEMPLATE.format(system=tool_instr, user=prompt)
                 else:
-                    prompt = last_user.content if isinstance(last_user.content, str) else ""
+                    prompt = last_user.get_text_content() if hasattr(last_user, "get_text_content") else (last_user.content if isinstance(last_user.content, str) else "")
                     sys_part = system_text
                     if tool_instr:
                         sys_part = (sys_part + "\n\n" + tool_instr).strip() if sys_part else tool_instr

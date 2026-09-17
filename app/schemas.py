@@ -3,7 +3,7 @@ OpenAI-compatible and service Pydantic schemas.
 """
 
 from typing import Any, Dict, List, Literal, Optional, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ChatImage(BaseModel):
@@ -40,6 +40,55 @@ class ChatMessage(BaseModel):
     name: Optional[str] = None
     tool_call_id: Optional[str] = None
     tool_calls: Optional[List[ToolCall]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _extract_multimodal(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        content = data.get("content")
+        images = list(data.get("images") or [])
+        if isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict):
+                    ptype = part.get("type")
+                    if ptype == "image_url":
+                        url_obj = part.get("image_url", {})
+                        url = url_obj.get("url", "") if isinstance(url_obj, dict) else str(url_obj)
+                        if url:
+                            if url.startswith("data:image"):
+                                images.append(ChatImage(type="image_base64", value=url.partition(",")[2]))
+                            elif url.startswith(("http://", "https://")):
+                                images.append(ChatImage(type="image_url", value=url))
+                            else:
+                                images.append(ChatImage(type="image_path", value=url))
+                    elif ptype == "image":
+                        img_val = part.get("image", "")
+                        if img_val:
+                            if img_val.startswith("data:image"):
+                                images.append(ChatImage(type="image_base64", value=img_val.partition(",")[2]))
+                            elif img_val.startswith(("http://", "https://")):
+                                images.append(ChatImage(type="image_url", value=img_val))
+                            else:
+                                images.append(ChatImage(type="image_path", value=img_val))
+            if images:
+                data = dict(data)
+                data["images"] = images
+        return data
+
+    def get_text_content(self) -> str:
+        """Returns string text content regardless of whether content was string or list."""
+        if isinstance(self.content, str):
+            return self.content
+        if isinstance(self.content, list):
+            texts = []
+            for part in self.content:
+                if isinstance(part, str):
+                    texts.append(part)
+                elif isinstance(part, dict) and part.get("type") == "text":
+                    texts.append(str(part.get("text", "")))
+            return "\n".join(texts)
+        return ""
 
 
 class EditRequest(BaseModel):
