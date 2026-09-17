@@ -2,16 +2,37 @@
 
 > **Unite [FreeQwenApi](https://github.com/y13sint/FreeQwenApi) and [DeepSeek-Api-Free](https://github.com/zDEBRYrp/DeepSeek-Api-Free) into a single high-performance OpenAI-compatible server with 1 Unified API Key, automatic model routing, multi-account rotation, and a built-in modern Dashboard.**
 
+📖 **New to this project? Check out our [Complete Beginner & Getting Started Guide (GET_STARTED.md)](GET_STARTED.md) for app configuration (Cursor, Open WebUI, NextChat), zero-confusion cookie setup, and troubleshooting.**
+
+---
+
+## ⚡ 1-Click Auto-Start (Fastest Way to Run)
+
+No manual environment configuration needed! Use the included one-click starters:
+
+| Operating System | 1-Click Command / Action | What it does |
+| :--- | :--- | :--- |
+| **🍎 macOS & 🐧 Linux** | `./start.sh` | Automatically creates `.venv`, installs dependencies, runs server & opens Dashboard. |
+| **🪟 Windows** | Double-click `start.bat` | Zero terminal knowledge required. Sets up dependencies and launches server in browser. |
+| **🐳 Docker** | `docker compose up -d` | Runs completely containerized with headless Chromium and auto-restart on boot. |
+| **🔄 Auto-Start on Boot** | `python start.py --autostart` | Installs system background service (`launchd` on Mac, `systemd` on Linux, Startup on Windows). |
+
+Once started, open your browser at:
+👉 **`http://localhost:8000/dashboard`**
+
 ---
 
 ## 🚀 Key Features
 
 * 🔑 **1 API Key for Everything**: Use a single `Authorization: Bearer <API_KEY>` for all models across both providers. No separate ports, separate proxies, or token juggling.
+* 🧵 **Intelligent 1-Chat Task Affinity**: Automatically matches prompts by task/theme so follow-up turns stay inside **1 single chat thread** on `chat.qwen.ai` and `chat.deepseek.com`, eliminating fragmented duplicate chats.
 * 🤖 **Automatic Model Routing**: Send requests to `/v1/chat/completions` with any model name:
   * **DeepSeek Models** (`deepseek-chat`, `deepseek-think`, `deepseek-reasoner`, `deepseek-r1`, `deepseek-search`) automatically route to the persistent DeepSeek browser automation pool.
   * **Qwen Models** (`qwen3.7-max`, `qwen3.7-plus`, `qwen3-coder-plus`, `qwq-32b`, `qvq-72b`, etc.) automatically route to the high-speed Qwen direct API stream.
 * 🖥️ **Built-in Modern Dashboard (`/dashboard`)**:
+  * **Getting Started Wizard**: 3-step checklist to connect accounts, copy credentials, and test live chat.
   * **Live AI Playground**: Test streaming responses, collapsible DeepThink reasoning accordion (`reasoning_content`), and web search citations in real time.
+  * **Task & Chat Manager**: Visual dashboard to inspect ongoing upstream threads, turn counts, and switch or delete tasks.
   * **Account Manager**: Visual dashboard for Qwen Bearer tokens and DeepSeek browser profiles with live status, cooldown timers, and manual addition.
   * **Model Catalog**: Complete reference of all 34+ models, capabilities (Chat, Reasoning, Code, Vision, Search), and aliases.
   * **Text-to-Image Studio**: Generate images directly using Qwen Wanx (`/v1/images/generations`).
@@ -21,7 +42,7 @@
 * ⚡ **100% OpenAI Compatible**:
   * Works out-of-the-box with **Open WebUI**, **Cursor**, **Continue**, **NextChat**, **LangChain**, **LlamaIndex**, and the official `openai` Python/Node SDKs.
 * 🐳 **Production-Ready Deployment**:
-  * Run locally with Python 3.11+, or run via **Docker** and **Docker Compose** with headless Chromium and `xvfb`.
+  * Run locally with Python 3.10+, or run via **Docker** and **Docker Compose** with headless Chromium and `xvfb`.
 
 ---
 
@@ -59,14 +80,15 @@
 
 ---
 
-## 🛠️ Quick Start
+## 🛠️ Step-by-Step Manual Setup
+
+If you prefer setting up manually instead of the 1-click starters:
 
 ### 1. Installation
 
-Clone the repository and install dependencies:
-
 ```bash
-cd qwen-deepseek-api
+git clone https://github.com/nenubics/qwen-deepseek-united-free-api.git
+cd qwen-deepseek-united-free-api
 pip install -r requirements.txt
 playwright install --with-deps chromium
 ```
@@ -95,7 +117,7 @@ PORT=8000
 
 ### 3. Account Authorization
 
-Use the included `login.py` CLI to authorize your accounts:
+Use the included `login.py` CLI or the Dashboard to authorize your accounts:
 
 #### Check current accounts status
 ```bash
@@ -156,7 +178,7 @@ Open your browser and visit:
 You can run the entire unified stack in Docker without installing Python or browser binaries locally:
 
 ```bash
-# Start container in background
+# Start container in background (configured with restart: unless-stopped)
 docker compose up -d
 
 # View server logs

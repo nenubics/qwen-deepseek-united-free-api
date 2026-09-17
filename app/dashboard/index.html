@@ -152,6 +152,61 @@
 
   <!-- TAB 1: OVERVIEW & SETUP -->
   <div id="tab-overview" class="tab-pane active">
+
+    <!-- 🌟 Beginner-Friendly 3-Step Wizard Banner -->
+    <div class="card" style="background:linear-gradient(135deg, rgba(56, 189, 248, 0.09) 0%, rgba(168, 85, 247, 0.09) 100%); border:1px solid rgba(56, 189, 248, 0.25); margin-bottom:18px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+        <div>
+          <h2 style="margin:0; font-size:16px; color:var(--text); display:flex; align-items:center; gap:8px;">
+            <span>👋 Welcome to Unified Free AI API!</span>
+            <span class="badge ok" style="font-size:11px;">100% Free &amp; Unlimited</span>
+          </h2>
+          <p style="margin:4px 0 0 0; color:var(--muted); font-size:12px;">
+            Your personal high-performance proxy uniting <strong>Qwen 3.7 &amp; DeepSeek R1</strong> into 1 single API key with zero chat fragmentation.
+          </p>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button onclick="testQuickPrompt()" class="primary sm">💬 Try Live Chat</button>
+          <button onclick="switchTab('accounts')" class="sm">🍪 Auto-Import Cookies</button>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
+        <!-- Step 1 -->
+        <div style="background:var(--card2); border:1px solid var(--border); border-radius:8px; padding:12px; display:flex; flex-direction:column; justify-content:space-between;">
+          <div>
+            <div style="font-size:11px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Step 1: Connect Account</div>
+            <div style="font-size:13px; font-weight:600; margin-bottom:4px;" id="wizardStep1Status">Checking accounts...</div>
+            <p style="font-size:11px; color:var(--muted); margin:0 0 10px 0;">Import cookies from <code>chat.qwen.ai</code> or <code>chat.deepseek.com</code>, or sign in via browser.</p>
+          </div>
+          <button onclick="switchTab('accounts')" class="sm" style="width:100%; justify-content:center;">➕ Add / Import Accounts</button>
+        </div>
+
+        <!-- Step 2 -->
+        <div style="background:var(--card2); border:1px solid var(--border); border-radius:8px; padding:12px; display:flex; flex-direction:column; justify-content:space-between;">
+          <div>
+            <div style="font-size:11px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Step 2: Copy API Credentials</div>
+            <div style="font-size:13px; font-weight:600; margin-bottom:4px;">1 Unified API Key for All Models</div>
+            <p style="font-size:11px; color:var(--muted); margin:0 0 10px 0;">One endpoint &amp; key works for Cursor, Open WebUI, NextChat &amp; Python.</p>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button onclick="copyBaseUrl()" class="sm" style="flex:1; justify-content:center;">Copy URL</button>
+            <button onclick="copyApiKey()" class="sm primary" style="flex:1; justify-content:center;">Copy Key</button>
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div style="background:var(--card2); border:1px solid var(--border); border-radius:8px; padding:12px; display:flex; flex-direction:column; justify-content:space-between;">
+          <div>
+            <div style="font-size:11px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Step 3: Plug into Any Client</div>
+            <div style="font-size:13px; font-weight:600; margin-bottom:4px;">Standard OpenAI Compatible</div>
+            <p style="font-size:11px; color:var(--muted); margin:0 0 10px 0;">Paste URL &amp; Key into any client, or chat directly in our playground!</p>
+          </div>
+          <button onclick="switchTab('playground')" class="sm" style="width:100%; justify-content:center;">🚀 Open Interactive Playground</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Stat KPIs -->
     <div class="grid-4">
       <div class="card">
@@ -184,8 +239,14 @@
           All models (Qwen and DeepSeek) share this <strong>exact same OpenAI-compatible URL and API key</strong>. Pass the model you want in <code>model</code>!
         </p>
         <div style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:12px; margin-bottom:12px; font-family:var(--mono); font-size:12px;">
-          <div><span style="color:var(--muted)">Base URL:</span> <b style="color:var(--text)" id="cfgBaseUrl">http://localhost:8000/v1</b></div>
-          <div style="margin-top:4px;"><span style="color:var(--muted)">API Key:</span> <b style="color:var(--text)" id="cfgApiKeyText">sk-unified-free-key</b></div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div><span style="color:var(--muted)">Base URL:</span> <b style="color:var(--text)" id="cfgBaseUrl">http://localhost:8000/v1</b></div>
+            <button onclick="copyBaseUrl()" class="sm">Copy</button>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+            <div><span style="color:var(--muted)">API Key:</span> <b style="color:var(--text)" id="cfgApiKeyText">sk-unified-free-key</b></div>
+            <button onclick="copyApiKey()" class="sm">Copy</button>
+          </div>
         </div>
 
         <h3>cURL Example (Choose Qwen or DeepSeek):</h3>
@@ -200,14 +261,48 @@
 
       <div class="card">
         <h2>💡 Integration Snippets</h2>
-        <div style="display:flex; gap:6px; margin-bottom:10px;">
+        <div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap;">
           <button onclick="showSnippet('openwebui')" class="sm primary">Open WebUI</button>
           <button onclick="showSnippet('cursor')" class="sm">Cursor / Cline</button>
-          <button onclick="showSnippet('python')" class="sm">Python SDK</button>
+          <button onclick="showSnippet('nextchat')" class="sm">NextChat</button>
+          <button onclick="showSnippet('python')" class="sm">Python</button>
+          <button onclick="showSnippet('curl')" class="sm">cURL</button>
         </div>
 
         <div id="snipContent" style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:12px; font-family:var(--mono); font-size:12px; line-height:1.6; max-height:220px; overflow:auto;">
           <!-- Content populated dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ⚡ 1-Click Auto-Start & System Boot Card -->
+    <div class="card" style="margin-top:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div>
+          <h2 style="margin:0;">⚡ 1-Click Auto-Start &amp; Boot Service (Mac, Linux, Windows)</h2>
+          <p style="color:var(--muted); font-size:12px; margin:4px 0 0 0;">
+            Never configure ports or manual commands again. Use the included one-click starters:
+          </p>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:14px; margin-top:14px;">
+        <div style="background:var(--card2); border:1px solid var(--border); border-radius:8px; padding:12px;">
+          <div style="font-weight:700; font-size:13px; margin-bottom:4px;">🍎 macOS &amp; 🐧 Linux 1-Click</div>
+          <p style="font-size:11px; color:var(--muted); margin:0 0 8px 0;">Automatically creates venv, installs dependencies, and launches browser.</p>
+          <code style="display:block; background:var(--bg); padding:6px 10px; border-radius:4px; font-size:11px; color:var(--accent);">./start.sh</code>
+        </div>
+
+        <div style="background:var(--card2); border:1px solid var(--border); border-radius:8px; padding:12px;">
+          <div style="font-weight:700; font-size:13px; margin-bottom:4px;">🪟 Windows 1-Click</div>
+          <p style="font-size:11px; color:var(--muted); margin:0 0 8px 0;">Double-click batch launcher. Zero command-line knowledge required.</p>
+          <code style="display:block; background:var(--bg); padding:6px 10px; border-radius:4px; font-size:11px; color:var(--accent);">start.bat</code>
+        </div>
+
+        <div style="background:var(--card2); border:1px solid var(--border); border-radius:8px; padding:12px;">
+          <div style="font-weight:700; font-size:13px; margin-bottom:4px;">🔄 Run on System Boot</div>
+          <p style="font-size:11px; color:var(--muted); margin:0 0 8px 0;">Installs background service (launchd / systemd / Windows Startup).</p>
+          <code style="display:block; background:var(--bg); padding:6px 10px; border-radius:4px; font-size:11px; color:var(--accent);">python start.py --autostart</code>
         </div>
       </div>
     </div>
@@ -534,6 +629,16 @@ async function loadStatus() {
     renderDeepSeekSessions(dsPool);
     showSnippet("openwebui");
     loadManagedChats();
+
+    const totalAccs = (data.qwen.total || 0) + (dsPool.total || 0);
+    const step1El = document.getElementById("wizardStep1Status");
+    if (step1El) {
+      if (totalAccs > 0) {
+        step1El.innerHTML = `<span style="color:var(--ok)">✓ ${totalAccs} Account(s) Connected &amp; Ready</span>`;
+      } else {
+        step1El.innerHTML = `<span style="color:var(--warn)">⚠️ No accounts connected yet</span>`;
+      }
+    }
   } catch (err) {
     document.getElementById("statusDot").className = "dot off";
     document.getElementById("statusText").innerText = "Offline";
@@ -582,6 +687,21 @@ function generateRandomKey() {
   document.getElementById("inputApiKey").value = key;
 }
 
+function copyBaseUrl() {
+  const url = window.location.origin + "/v1";
+  navigator.clipboard.writeText(url);
+  showToast("Base URL copied: " + url);
+}
+
+function testQuickPrompt() {
+  switchTab("playground");
+  const input = document.getElementById("chatInput");
+  if (input && !input.value) {
+    input.value = "Hello! Explain why 1 unified API key is great in 2 sentences.";
+    input.focus();
+  }
+}
+
 function showSnippet(type) {
   const key = currentApiKey || "YOUR_API_KEY";
   const url = window.location.origin + "/v1";
@@ -599,6 +719,21 @@ function showSnippet(type) {
 &bull; <b>Base URL:</b> <code style="color:var(--accent)">${url}</code><br>
 &bull; <b>API Key:</b> <code style="color:var(--accent)">${key}</code><br>
 &bull; <b>Model:</b> <code style="color:var(--accent)">deepseek-think</code> or <code style="color:var(--accent)">qwen3.7-max</code>`;
+  } else if (type === "nextchat") {
+    content = `<b>NextChat (ChatGPT-Next-Web) Setup:</b><br><br>
+&bull; <b>Model Provider:</b> OpenAI<br>
+&bull; <b>API URL:</b> <code style="color:var(--accent)">${url}</code><br>
+&bull; <b>API Key:</b> <code style="color:var(--accent)">${key}</code><br>
+&bull; <b>Custom Models:</b> <code style="color:var(--accent)">qwen3.7-max,deepseek-think,deepseek-chat,qwen3-coder-plus</code>`;
+  } else if (type === "curl") {
+    content = `curl ${url}/chat/completions \\
+  -H "Authorization: Bearer ${key}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "deepseek-think",
+    "messages": [{"role": "user", "content": "Explain AI proxy in 1 sentence."}],
+    "stream": true
+  }'`;
   } else if (type === "python") {
     content = `from openai import OpenAI
 
