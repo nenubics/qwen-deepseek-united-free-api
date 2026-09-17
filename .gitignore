@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Environment and Secrets
+.env
+data/*
+!data/.gitkeep
+session/*
+!session/.gitkeep
+profiles.json
+
+# Logs & temp
+logs/
+*.log
+scratch/
+
+# Cloned source repos (reference only)
+FreeQwenApi_repo/
+DeepSeek-Api-Free_repo/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

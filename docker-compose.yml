@@ -1,0 +1,17 @@
+services:
+  qwen-deepseek-api:
+    build: .
+    image: qwen-deepseek-api:latest
+    container_name: qwen-deepseek-api
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+    volumes:
+      - ./data:/app/data
+      - ./session:/app/session
+      - ./logs:/app/logs

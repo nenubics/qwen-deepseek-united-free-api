@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unified Free AI API — Qwen & DeepSeek</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='12 2 2 7 12 12 22 7 12 2'/%3E%3Cpolyline points='2 17 12 22 22 17'/%3E%3Cpolyline points='2 12 12 17 22 12'/%3E%3C/svg%3E">
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.7/dist/purify.min.js"></script>
+<style>
+  :root {
+    --bg: #090d16; --bg2: #0f172a; --card: #131d31; --card2: #1e293b; --elev: #24344d;
+    --border: #20314d; --border2: #334a6e;
+    --text: #f1f5f9; --muted: #94a3b8; --faint: #64748b;
+    --accent: #38bdf8; --accent-press: #0284c7; --accent-glow: rgba(56, 189, 248, 0.18);
+    --qwen-color: #a855f7; --deepseek-color: #3b82f6;
+    --ok: #22c55e; --warn: #f59e0b; --err: #ef4444;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --r: 8px; --r2: 12px; --shadow: 0 4px 14px rgba(0,0,0,0.35);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.5; font-size: 14px; min-height: 100vh; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 14px 20px 40px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  header { position: sticky; top: 0; z-index: 30; background: rgba(9, 13, 22, 0.88); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 12px 0; margin-bottom: 16px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; letter-spacing: -0.02em; }
+  .brand-tag { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: rgba(56, 189, 248, 0.15); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.3); }
+  .brand svg { width: 24px; height: 24px; color: var(--accent); }
+  .hdr-right { display: flex; align-items: center; gap: 10px; }
+
+  .pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); font-size: 12px; font-weight: 600; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+  .dot.on { background: var(--ok); box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2); }
+  .dot.off { background: var(--err); box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2); }
+
+  .key-badge { display: inline-flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--border); padding: 5px 10px; border-radius: 6px; font-size: 12px; font-family: var(--mono); }
+  .key-badge button { padding: 2px 6px; font-size: 11px; }
+
+  /* Navigation Tabs */
+  .nav-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+  .nav-tab { font-family: inherit; cursor: pointer; background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted); padding: 10px 16px; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; transition: all .15s; white-space: nowrap; }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; animation: fadeIn .18s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Grid & Cards */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+  @media(max-width: 860px) { .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; } }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r2); padding: 18px; box-shadow: var(--shadow); position: relative; }
+  .card h2 { font-size: 15px; margin: 0 0 14px; display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .card h3 { font-size: 13px; margin: 12px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .kpi-num { font-size: 26px; font-weight: 700; line-height: 1.1; margin-top: 2px; }
+  .kpi-lbl { color: var(--muted); font-size: 12px; margin-top: 4px; display: flex; align-items: center; gap: 6px; }
+
+  button { font-family: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--border2); background: var(--elev); color: var(--text); padding: 7px 13px; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; transition: all .15s; }
+  button:hover { border-color: var(--accent); color: var(--accent); background: rgba(56, 189, 248, 0.08); }
+  button.primary { background: var(--accent-press); border-color: #0369a1; color: #fff; font-weight: 600; }
+  button.primary:hover { background: #0ea5e9; color: #fff; }
+  button.danger:hover { border-color: var(--err); color: var(--err); background: rgba(239, 68, 68, 0.08); }
+  button.sm { padding: 4px 8px; font-size: 11px; }
+
+  input, textarea, select { width: 100%; font-family: inherit; font-size: 13px; background: var(--elev); border: 1px solid var(--border2); border-radius: 6px; padding: 8px 12px; color: var(--text); }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+  textarea { resize: vertical; }
+
+  .badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; }
+  .badge.qwen { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); }
+  .badge.deepseek { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); }
+  .badge.ok { background: rgba(34, 197, 94, 0.18); color: #4ade80; }
+  .badge.wait { background: rgba(245, 158, 11, 0.18); color: #fbbf24; }
+  .badge.err { background: rgba(239, 68, 68, 0.18); color: #f87171; }
+
+  /* Chat UI */
+  .chat-container { display: flex; flex-direction: column; height: 68vh; min-height: 480px; }
+  .chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 10px 4px; }
+  .chat-msg { max-width: 86%; padding: 10px 14px; border-radius: 10px; word-break: break-word; line-height: 1.55; }
+  .chat-msg.user { align-self: flex-end; background: var(--accent-press); color: #fff; border-bottom-right-radius: 2px; }
+  .chat-msg.assistant { align-self: flex-start; background: var(--card2); border: 1px solid var(--border); border-bottom-left-radius: 2px; width: 100%; max-width: 90%; }
+  .chat-msg .meta { font-size: 11px; opacity: 0.7; margin-bottom: 4px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; }
+  .thinking-box { background: rgba(0, 0, 0, 0.25); border-left: 3px solid var(--deepseek-color); border-radius: 4px; padding: 8px 12px; margin-bottom: 10px; font-size: 12px; color: var(--muted); }
+  .thinking-box summary { cursor: pointer; font-weight: 600; color: #93c5fd; user-select: none; }
+  .thinking-content { margin-top: 6px; white-space: pre-wrap; font-family: var(--mono); }
+  .citations-box { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); }
+  .citations-box ol { margin: 4px 0 0 16px; padding: 0; }
+  .streaming-cursor::after { content: " ▍"; animation: blink 1s infinite; color: var(--accent); }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .chat-bottom { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .chat-input-row { display: flex; gap: 8px; align-items: flex-end; }
+  .chat-input-row textarea { min-height: 52px; max-height: 160px; font-size: 14px; }
+
+  /* Code & Markdown in chat */
+  .md p { margin: 0.4em 0; }
+  .md pre { background: #080c14; padding: 10px 12px; border-radius: 6px; overflow-x: auto; border: 1px solid var(--border); font-family: var(--mono); font-size: 12px; }
+  .md code { font-family: var(--mono); background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 4px; font-size: 0.9em; }
+
+  /* Models grid */
+  .model-card { background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; transition: border-color .15s; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; }
+  .model-card:hover { border-color: var(--accent); }
+  .model-name { font-weight: 700; font-family: var(--mono); font-size: 13px; word-break: break-all; }
+  .model-desc { font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+  /* Accounts table */
+  .acc-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--card2); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; gap: 12px; flex-wrap: wrap; }
+  .acc-id { font-family: var(--mono); font-weight: 600; font-size: 13px; }
+
+  /* Toast Notification */
+  #toast { position: fixed; bottom: 20px; right: 20px; background: var(--card2); border: 1px solid var(--border2); color: var(--text); padding: 10px 16px; border-radius: 8px; box-shadow: var(--shadow); z-index: 999; display: none; font-size: 13px; font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+      <span>FreeQwen + DeepSeek API</span>
+      <span class="brand-tag">Unified Proxy</span>
+    </div>
+    <div class="hdr-right">
+      <div class="key-badge" title="Unified API Key for all models">
+        <span>🔑 Key:</span>
+        <span id="hdrApiKeyPreview">Loading...</span>
+        <button onclick="copyApiKey()" class="sm">Copy</button>
+      </div>
+      <div class="pill">
+        <div class="dot on" id="statusDot"></div>
+        <span id="statusText">Ready</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchTab('overview')">📊 Overview &amp; Setup</button>
+    <button class="nav-tab" onclick="switchTab('playground')">💬 Interactive Chat</button>
+    <button class="nav-tab" onclick="switchTab('accounts')">👥 Accounts &amp; Sessions</button>
+    <button class="nav-tab" onclick="switchTab('models')">📋 Models Catalog</button>
+    <button class="nav-tab" onclick="switchTab('settings')">🔑 API Key &amp; Settings</button>
+    <button class="nav-tab" onclick="switchTab('media')">🎨 Media Studio</button>
+  </div>
+
+  <!-- TAB 1: OVERVIEW & SETUP -->
+  <div id="tab-overview" class="tab-pane active">
+    <!-- Stat KPIs -->
+    <div class="grid-4">
+      <div class="card">
+        <div class="kpi-lbl">Service Status</div>
+        <div class="kpi-num" id="kpiStatus" style="color:var(--ok)">Active</div>
+        <div class="kpi-lbl" id="kpiUptime">Uptime: 0s</div>
+      </div>
+      <div class="card">
+        <div class="kpi-lbl">Unified API Key</div>
+        <div class="kpi-num" id="kpiKeyStatus" style="font-size:18px; font-family:var(--mono);">1 Key for all</div>
+        <div class="kpi-lbl">Single Bearer token authentication</div>
+      </div>
+      <div class="card">
+        <div class="kpi-lbl">Qwen Chat Accounts</div>
+        <div class="kpi-num" id="kpiQwenAccounts" style="color:var(--qwen-color)">0</div>
+        <div class="kpi-lbl" id="kpiQwenActive">0 active in rotation</div>
+      </div>
+      <div class="card">
+        <div class="kpi-lbl">DeepSeek Pool Sessions</div>
+        <div class="kpi-num" id="kpiDeepSeekSessions" style="color:var(--deepseek-color)">0</div>
+        <div class="kpi-lbl" id="kpiDeepSeekReady">Browser pool status</div>
+      </div>
+    </div>
+
+    <!-- Quick Integration Guide -->
+    <div class="grid-2">
+      <div class="card">
+        <h2>🚀 Connect Client to Unified Endpoint</h2>
+        <p style="color:var(--muted); font-size:13px; margin-top:0;">
+          All models (Qwen and DeepSeek) share this <strong>exact same OpenAI-compatible URL and API key</strong>. Pass the model you want in <code>model</code>!
+        </p>
+        <div style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:12px; margin-bottom:12px; font-family:var(--mono); font-size:12px;">
+          <div><span style="color:var(--muted)">Base URL:</span> <b style="color:var(--text)" id="cfgBaseUrl">http://localhost:8000/v1</b></div>
+          <div style="margin-top:4px;"><span style="color:var(--muted)">API Key:</span> <b style="color:var(--text)" id="cfgApiKeyText">sk-unified-free-key</b></div>
+        </div>
+
+        <h3>cURL Example (Choose Qwen or DeepSeek):</h3>
+        <pre style="background:var(--bg); padding:10px; border-radius:6px; font-family:var(--mono); font-size:12px; overflow-x:auto; border:1px solid var(--border); color:#38bdf8;">curl http://localhost:8000/v1/chat/completions \
+  -H "Authorization: Bearer <span class="snippet-key">sk-unified-free-key</span>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "qwen3.7-max",
+    "messages": [{"role": "user", "content": "Hello Qwen!"}]
+  }'</pre>
+      </div>
+
+      <div class="card">
+        <h2>💡 Integration Snippets</h2>
+        <div style="display:flex; gap:6px; margin-bottom:10px;">
+          <button onclick="showSnippet('openwebui')" class="sm primary">Open WebUI</button>
+          <button onclick="showSnippet('cursor')" class="sm">Cursor / Cline</button>
+          <button onclick="showSnippet('python')" class="sm">Python SDK</button>
+        </div>
+
+        <div id="snipContent" style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:12px; font-family:var(--mono); font-size:12px; line-height:1.6; max-height:220px; overflow:auto;">
+          <!-- Content populated dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: INTERACTIVE CHAT PLAYGROUND -->
+  <div id="tab-playground" class="tab-pane">
+    <div class="card chat-container">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:12px; gap:10px; flex-wrap:wrap;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <label style="font-weight:600; font-size:13px;">Model:</label>
+          <select id="chatModelSelect" style="width:260px; font-weight:600;">
+            <optgroup label="--- DeepSeek Models ---">
+              <option value="deepseek-chat">deepseek-chat (V3 Fast)</option>
+              <option value="deepseek-think" selected>deepseek-think (R1 Reasoning)</option>
+              <option value="deepseek-search">deepseek-search (Web Search)</option>
+              <option value="deepseek-think-search">deepseek-think-search (R1 + Search)</option>
+            </optgroup>
+            <optgroup label="--- Qwen Models ---">
+              <option value="qwen3.7-max">qwen3.7-max (Flagship)</option>
+              <option value="qwen3.7-plus">qwen3.7-plus (Balanced)</option>
+              <option value="qwen3.6-plus">qwen3.6-plus</option>
+              <option value="qwen3.5-plus">qwen3.5-plus</option>
+              <option value="qwen3-coder-plus">qwen3-coder-plus (Coding)</option>
+              <option value="qwq-32b">qwq-32b (Reasoning)</option>
+              <option value="qwen3-vl-plus">qwen3-vl-plus (Vision)</option>
+              <option value="qwen2.5-72b-instruct">qwen2.5-72b-instruct</option>
+            </optgroup>
+          </select>
+          <span id="modelProviderBadge" class="badge deepseek">DeepSeek</span>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button onclick="clearChat()" class="sm danger">Clear History</button>
+        </div>
+      </div>
+
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-msg assistant">
+          <div class="meta"><span>ASSISTANT</span></div>
+          <div class="md">Hello! I am connected to your unified <strong>FreeQwen &amp; DeepSeek API</strong>. Select any model above and start chatting!</div>
+        </div>
+      </div>
+
+      <div class="chat-bottom">
+        <div class="chat-input-row">
+          <textarea id="chatInput" placeholder="Type your prompt here... (Press Shift+Enter for newline, Enter to send)" rows="2"></textarea>
+          <button onclick="sendChatMessage()" id="btnSendChat" class="primary" style="height:52px; padding:0 20px;">Send</button>
+          <button onclick="stopChatStream()" id="btnStopChat" class="danger" style="height:52px; display:none;">Stop</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: ACCOUNTS & SESSIONS -->
+  <div id="tab-accounts" class="tab-pane">
+    <div class="grid-2">
+      <!-- Qwen Accounts -->
+      <div class="card">
+        <h2>🟣 Qwen Accounts</h2>
+        <p style="color:var(--muted); font-size:12px;">Multi-account token rotation with rate limit recovery.</p>
+        
+        <div id="qwenAccountsList" style="margin-bottom:16px;">Loading accounts...</div>
+
+        <h3>Add Account manually</h3>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <input type="text" id="addQwenToken" placeholder="Paste Qwen JWT Token (eyJ...)" />
+          <input type="text" id="addQwenLabel" placeholder="Optional Account Label (e.g. Work / Acc 2)" />
+          <div style="display:flex; gap:8px;">
+            <button onclick="submitAddQwenAccount()" class="primary sm">Add Token</button>
+            <button onclick="triggerQwenBrowserLogin()" class="sm">Open Browser Login</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DeepSeek Profiles -->
+      <div class="card">
+        <h2>🔵 DeepSeek Browser Sessions</h2>
+        <p style="color:var(--muted); font-size:12px;">Automated Chromium browser sessions for chat.deepseek.com.</p>
+
+        <div id="deepseekProfilesList" style="margin-bottom:16px;">Loading sessions...</div>
+
+        <h3>Session Actions</h3>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <button onclick="triggerDeepSeekBrowserLogin()" class="primary sm">Open Visible Browser for Login</button>
+          <p style="color:var(--muted); font-size:11px; margin:0;">
+            Opens a visible Chromium window on the host machine to let you log into DeepSeek Chat manually.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 4: MODELS CATALOG -->
+  <div id="tab-models" class="tab-pane">
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <h2>Available Models (<span id="modelsTotalCount">0</span>)</h2>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="modelsFilter" placeholder="Filter models..." oninput="filterModelsCatalog()" style="width:200px;" />
+          <button onclick="refreshModelsCatalog()" class="sm">Refresh</button>
+        </div>
+      </div>
+      <div class="grid-3" id="modelsCatalogGrid" style="margin-top:14px;">
+        Loading models...
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 5: API KEY & SETTINGS -->
+  <div id="tab-settings" class="tab-pane">
+    <div class="grid-2">
+      <div class="card">
+        <h2>🔑 Unified API Key Configuration</h2>
+        <p style="color:var(--muted); font-size:12px;">
+          Clients use this single key in <code>Authorization: Bearer &lt;KEY&gt;</code> for both Qwen and DeepSeek.
+        </p>
+        <div style="display:flex; flex-direction:column; gap:10px; margin-top:12px;">
+          <label style="font-size:12px; color:var(--muted);">Current Master API Key:</label>
+          <input type="text" id="inputApiKey" placeholder="Enter API Key or leave empty to disable auth" />
+          <div style="display:flex; gap:8px;">
+            <button onclick="saveApiKey()" class="primary">Save Key</button>
+            <button onclick="generateRandomKey()">Generate New Key</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>⚙️ Server Preferences</h2>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div>
+            <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Default Fallback Model:</label>
+            <select id="selectDefaultModel">
+              <option value="qwen3.7-max">qwen3.7-max</option>
+              <option value="deepseek-chat">deepseek-chat</option>
+              <option value="deepseek-think">deepseek-think</option>
+            </select>
+          </div>
+          <button onclick="saveDefaultModel()" class="primary" style="width:fit-content;">Save Default Model</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 6: MEDIA STUDIO -->
+  <div id="tab-media" class="tab-pane">
+    <div class="grid-2">
+      <div class="card">
+        <h2>🎨 Qwen Image Generation (Text-to-Image)</h2>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div>
+            <label style="font-size:12px; color:var(--muted);">Prompt:</label>
+            <textarea id="imgPrompt" rows="3" placeholder="Describe the image you want to generate..."></textarea>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <div style="flex:1;">
+              <label style="font-size:12px; color:var(--muted);">Model:</label>
+              <select id="imgModel">
+                <option value="qwen3-vl-plus">qwen3-vl-plus (Chat Native)</option>
+                <option value="qwen-image-plus">qwen-image-plus</option>
+                <option value="wan2.5-t2i-preview">wan2.5-t2i-preview</option>
+              </select>
+            </div>
+            <div style="width:120px;">
+              <label style="font-size:12px; color:var(--muted);">Aspect Ratio:</label>
+              <select id="imgSize">
+                <option value="1:1" selected>1:1 (Square)</option>
+                <option value="16:9">16:9 (Landscape)</option>
+                <option value="9:16">9:16 (Portrait)</option>
+                <option value="4:3">4:3</option>
+              </select>
+            </div>
+          </div>
+          <button onclick="generateImage()" id="btnGenImage" class="primary" style="margin-top:6px;">Generate Image</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>🖼️ Output Result</h2>
+        <div id="imgResultContainer" style="min-height:220px; display:flex; align-items:center; justify-content:center; background:var(--bg); border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+          <span style="color:var(--muted); font-size:12px;">Generated image will appear here</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast">Message</div>
+
+<script>
+let currentApiKey = "";
+let currentStatusData = null;
+let allModelsList = [];
+let activeChatAbort = null;
+
+function showToast(msg, isErr = false) {
+  const t = document.getElementById("toast");
+  t.innerText = msg;
+  t.style.borderColor = isErr ? "var(--err)" : "var(--accent)";
+  t.style.display = "block";
+  setTimeout(() => { t.style.display = "none"; }, 3000);
+}
+
+function switchTab(tabId) {
+  document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+  event.currentTarget.classList.add("active");
+  document.getElementById("tab-" + tabId).classList.add("active");
+}
+
+async function loadStatus() {
+  try {
+    const res = await fetch("/api/status");
+    const data = await res.json();
+    currentStatusData = data;
+
+    currentApiKey = (data.api_key && data.api_key.key) || "";
+    document.getElementById("hdrApiKeyPreview").innerText = data.api_key.preview || "Disabled";
+    document.getElementById("cfgApiKeyText").innerText = currentApiKey || "None (disabled)";
+    document.getElementById("inputApiKey").value = currentApiKey;
+
+    document.getElementById("cfgBaseUrl").innerText = window.location.origin + "/v1";
+    document.getElementById("kpiUptime").innerText = "Uptime: " + formatUptime(data.uptime);
+    document.getElementById("kpiQwenAccounts").innerText = data.qwen.total;
+    document.getElementById("kpiQwenActive").innerText = data.qwen.active + " active accounts";
+
+    const dsPool = data.deepseek.pool || {};
+    document.getElementById("kpiDeepSeekSessions").innerText = dsPool.total || 0;
+    document.getElementById("kpiDeepSeekReady").innerText = (dsPool.active || 0) + " ready, " + (dsPool.cooling || 0) + " cooling";
+
+    renderQwenAccounts(data.qwen.accounts || []);
+    renderDeepSeekSessions(dsPool);
+    showSnippet("openwebui");
+  } catch (err) {
+    document.getElementById("statusDot").className = "dot off";
+    document.getElementById("statusText").innerText = "Offline";
+  }
+}
+
+function formatUptime(sec) {
+  if (!sec) return "0s";
+  const m = Math.floor(sec / 60);
+  const h = Math.floor(m / 60);
+  if (h > 0) return `${h}h ${m % 60}m`;
+  if (m > 0) return `${m}m ${sec % 60}s`;
+  return `${sec}s`;
+}
+
+function copyApiKey() {
+  if (!currentApiKey) {
+    showToast("No API key configured (Auth is disabled)");
+    return;
+  }
+  navigator.clipboard.writeText(currentApiKey);
+  showToast("API Key copied to clipboard!");
+}
+
+async function saveApiKey() {
+  const newKey = document.getElementById("inputApiKey").value.trim();
+  try {
+    const res = await fetch("/api/settings/api-key", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: newKey })
+    });
+    if (res.ok) {
+      showToast("API Key saved successfully!");
+      loadStatus();
+    } else {
+      showToast("Error saving API Key", true);
+    }
+  } catch (e) {
+    showToast("Network error: " + e.message, true);
+  }
+}
+
+function generateRandomKey() {
+  const key = "sk-free-" + Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
+  document.getElementById("inputApiKey").value = key;
+}
+
+function showSnippet(type) {
+  const key = currentApiKey || "YOUR_API_KEY";
+  const url = window.location.origin + "/v1";
+  let content = "";
+
+  if (type === "openwebui") {
+    content = `<b>Open WebUI Connection Settings:</b><br><br>
+1. Go to <b>Admin Panel &gt; Settings &gt; Connections &gt; OpenAI API</b><br>
+2. Add new connection:<br>
+   &bull; <b>API Base URL:</b> <code style="color:var(--accent)">${url}</code><br>
+   &bull; <b>API Key:</b> <code style="color:var(--accent)">${key}</code><br>
+3. Click Save. All Qwen and DeepSeek models will appear automatically!`;
+  } else if (type === "cursor") {
+    content = `<b>Cursor / Cline / Roo-Code Configuration:</b><br><br>
+&bull; <b>Base URL:</b> <code style="color:var(--accent)">${url}</code><br>
+&bull; <b>API Key:</b> <code style="color:var(--accent)">${key}</code><br>
+&bull; <b>Model:</b> <code style="color:var(--accent)">deepseek-think</code> or <code style="color:var(--accent)">qwen3.7-max</code>`;
+  } else if (type === "python") {
+    content = `from openai import OpenAI
+
+client = OpenAI(
+    base_url="${url}",
+    api_key="${key}"
+)
+
+# Works for both Qwen and DeepSeek!
+resp = client.chat.completions.create(
+    model="deepseek-think",
+    messages=[{"role": "user", "content": "Explain quantum computing in 2 lines"}]
+)
+print(resp.choices[0].message.content)`;
+  }
+
+  document.getElementById("snipContent").innerHTML = content;
+}
+
+function renderQwenAccounts(accounts) {
+  const cont = document.getElementById("qwenAccountsList");
+  if (!accounts || !accounts.length) {
+    cont.innerHTML = '<div style="color:var(--muted); font-size:12px;">No Qwen accounts added yet. Click below to add.</div>';
+    return;
+  }
+  let html = "";
+  accounts.forEach(acc => {
+    let badgeClass = acc.status === "OK" ? "ok" : (acc.status === "WAIT" ? "wait" : "err");
+    html += `
+      <div class="acc-row">
+        <div>
+          <span class="badge ${badgeClass}">${acc.status}</span>
+          <span class="acc-id">${acc.id}</span>
+          ${acc.label ? `<span style="color:var(--muted); font-size:11px;">(${acc.label})</span>` : ""}
+          <div style="color:var(--faint); font-size:11px; margin-top:2px;">Token: ${acc.token_preview || '...'}</div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button onclick="checkQwenAccount('${acc.id}')" class="sm">Verify</button>
+          <button onclick="deleteQwenAccount('${acc.id}')" class="sm danger">Delete</button>
+        </div>
+      </div>
+    `;
+  });
+  cont.innerHTML = html;
+}
+
+function renderDeepSeekSessions(pool) {
+  const cont = document.getElementById("deepseekProfilesList");
+  const profiles = pool.profiles || [];
+  if (!profiles.length) {
+    cont.innerHTML = '<div style="color:var(--muted); font-size:12px;">No active profiles in pool. Browser will start on login.</div>';
+    return;
+  }
+  let html = "";
+  profiles.forEach(p => {
+    let badgeClass = p.status === "ready" ? "ok" : "wait";
+    html += `
+      <div class="acc-row">
+        <div>
+          <span class="badge ${badgeClass}">${p.status}</span>
+          <span class="acc-id">${p.name}</span>
+          ${p.busy ? '<span style="color:var(--warn); font-size:11px;">(in use)</span>' : ''}
+        </div>
+      </div>
+    `;
+  });
+  cont.innerHTML = html;
+}
+
+async function submitAddQwenAccount() {
+  const token = document.getElementById("addQwenToken").value.trim();
+  const label = document.getElementById("addQwenLabel").value.trim();
+  if (!token) {
+    showToast("Please enter a token", true);
+    return;
+  }
+  try {
+    const res = await fetch("/api/accounts/qwen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, label })
+    });
+    const d = await res.json();
+    if (d.ok) {
+      showToast("Account added successfully!");
+      document.getElementById("addQwenToken").value = "";
+      document.getElementById("addQwenLabel").value = "";
+      loadStatus();
+    } else {
+      showToast(d.detail || "Failed to add", true);
+    }
+  } catch (e) {
+    showToast(e.message, true);
+  }
+}
+
+async function triggerQwenBrowserLogin() {
+  try {
+    const res = await fetch("/api/accounts/qwen/login", { method: "POST" });
+    const d = await res.json();
+    showToast(d.message || "Browser launched!");
+  } catch (e) {
+    showToast(e.message, true);
+  }
+}
+
+async function triggerDeepSeekBrowserLogin() {
+  try {
+    const res = await fetch("/api/accounts/deepseek/login", { method: "POST" });
+    const d = await res.json();
+    showToast(d.message || "Browser launched!");
+  } catch (e) {
+    showToast(e.message, true);
+  }
+}
+
+async function checkQwenAccount(id) {
+  showToast("Verifying account...");
+  try {
+    const res = await fetch(`/api/accounts/qwen/${encodeURIComponent(id)}/check`, { method: "POST" });
+    const d = await res.json();
+    showToast(d.message, !d.ok);
+    loadStatus();
+  } catch (e) {
+    showToast(e.message, true);
+  }
+}
+
+async function deleteQwenAccount(id) {
+  if (!confirm(`Delete account ${id}?`)) return;
+  try {
+    await fetch(`/api/accounts/qwen/${encodeURIComponent(id)}`, { method: "DELETE" });
+    showToast("Account deleted");
+    loadStatus();
+  } catch (e) {
+    showToast(e.message, true);
+  }
+}
+
+async function loadModels() {
+  try {
+    const res = await fetch("/v1/models");
+    const d = await res.json();
+    allModelsList = d.data || [];
+    document.getElementById("modelsTotalCount").innerText = allModelsList.length;
+    renderModelsGrid(allModelsList);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function renderModelsGrid(models) {
+  const cont = document.getElementById("modelsCatalogGrid");
+  if (!models.length) {
+    cont.innerHTML = '<div style="color:var(--muted); font-size:12px;">No models found</div>';
+    return;
+  }
+  let html = "";
+  models.forEach(m => {
+    const isQwen = m.owned_by === "qwen" || m.provider === "qwen";
+    const badgeClass = isQwen ? "qwen" : "deepseek";
+    const badgeText = isQwen ? "Qwen" : "DeepSeek";
+    const caps = (m.capabilities || ["chat"]).join(", ");
+
+    html += `
+      <div class="model-card">
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+            <span class="badge ${badgeClass}">${badgeText}</span>
+            <span style="font-size:10px; color:var(--faint);">${caps}</span>
+          </div>
+          <div class="model-name">${m.id}</div>
+          <div class="model-desc">${m.description || m.display_name || ''}</div>
+        </div>
+        <button onclick="selectModelInChat('${m.id}')" class="sm">Test in Chat &rarr;</button>
+      </div>
+    `;
+  });
+  cont.innerHTML = html;
+}
+
+function filterModelsCatalog() {
+  const query = document.getElementById("modelsFilter").value.toLowerCase();
+  const filtered = allModelsList.filter(m => m.id.toLowerCase().includes(query) || (m.display_name || '').toLowerCase().includes(query));
+  renderModelsGrid(filtered);
+}
+
+function selectModelInChat(modelId) {
+  const select = document.getElementById("chatModelSelect");
+  select.value = modelId;
+  updateChatModelBadge();
+  switchTab("playground");
+}
+
+document.getElementById("chatModelSelect").addEventListener("change", updateChatModelBadge);
+
+function updateChatModelBadge() {
+  const val = document.getElementById("chatModelSelect").value.toLowerCase();
+  const badge = document.getElementById("modelProviderBadge");
+  if (val.startsWith("deepseek")) {
+    badge.className = "badge deepseek";
+    badge.innerText = "DeepSeek";
+  } else {
+    badge.className = "badge qwen";
+    badge.innerText = "Qwen";
+  }
+}
+
+// Interactive Chat
+let chatHistory = [];
+
+function clearChat() {
+  chatHistory = [];
+  document.getElementById("chatMessages").innerHTML = `
+    <div class="chat-msg assistant">
+      <div class="meta"><span>ASSISTANT</span></div>
+      <div class="md">Chat cleared. Ready for your prompt!</div>
+    </div>
+  `;
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById("chatInput");
+  const prompt = input.value.trim();
+  if (!prompt) return;
+
+  const model = document.getElementById("chatModelSelect").value;
+  input.value = "";
+
+  // Append user message
+  chatHistory.push({ role: "user", content: prompt });
+  appendMessageUI("user", prompt);
+
+  // Prepare assistant message bubble with streaming indicator
+  const assistantBubble = appendMessageUI("assistant", "", true);
+  const contentDiv = assistantBubble.querySelector(".md");
+  const metaSpan = assistantBubble.querySelector(".meta-model");
+  metaSpan.innerText = model;
+
+  let thinkingDetails = null;
+  let thinkingContent = null;
+  let fullAnswer = "";
+  let fullThinking = "";
+
+  document.getElementById("btnSendChat").style.display = "none";
+  document.getElementById("btnStopChat").style.display = "inline-flex";
+
+  activeChatAbort = new AbortController();
+
+  try {
+    const headers = { "Content-Type": "application/json" };
+    if (currentApiKey) {
+      headers["Authorization"] = `Bearer ${currentApiKey}`;
+    }
+
+    const res = await fetch("/v1/chat/completions", {
+      method: "POST",
+      headers,
+      signal: activeChatAbort.signal,
+      body: JSON.stringify({
+        model,
+        messages: chatHistory,
+        stream: true
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
+      contentDiv.innerHTML = `<span style="color:var(--err)">Error (${res.status}): ${err.error?.message || res.statusText}</span>`;
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop(); // keep partial line
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith("data:")) continue;
+        const dataStr = trimmed.slice(5).trim();
+        if (dataStr === "[DONE]") break;
+
+        try {
+          const parsed = JSON.parse(dataStr);
+          const delta = parsed.choices?.[0]?.delta || {};
+
+          // Reasoning content (DeepSeek Think or Qwen)
+          if (delta.reasoning_content) {
+            if (!thinkingDetails) {
+              thinkingDetails = document.createElement("details");
+              thinkingDetails.className = "thinking-box";
+              thinkingDetails.open = true;
+              thinkingDetails.innerHTML = `<summary>Deep Thinking Process...</summary><div class="thinking-content"></div>`;
+              assistantBubble.insertBefore(thinkingDetails, contentDiv);
+              thinkingContent = thinkingDetails.querySelector(".thinking-content");
+            }
+            fullThinking += delta.reasoning_content;
+            thinkingContent.innerText = fullThinking;
+          }
+
+          // Main answer content
+          if (delta.content) {
+            fullAnswer += delta.content;
+            contentDiv.innerHTML = DOMPurify.sanitize(marked.parse(fullAnswer));
+          }
+
+          // Citations if any
+          if (parsed.citations && parsed.citations.length) {
+            let citBox = assistantBubble.querySelector(".citations-box");
+            if (!citBox) {
+              citBox = document.createElement("div");
+              citBox.className = "citations-box";
+              assistantBubble.appendChild(citBox);
+            }
+            citBox.innerHTML = `<b>Sources:</b><ol>${parsed.citations.map(c => `<li><a href="${c}" target="_blank">${c}</a></li>`).join('')}</ol>`;
+          }
+
+          document.getElementById("chatMessages").scrollTop = document.getElementById("chatMessages").scrollHeight;
+        } catch (e) {
+          // ignore chunk parse errors
+        }
+      }
+    }
+
+    chatHistory.push({ role: "assistant", content: fullAnswer });
+  } catch (err) {
+    if (err.name !== "AbortError") {
+      contentDiv.innerHTML += `<br><span style="color:var(--err)">[Connection error: ${err.message}]</span>`;
+    }
+  } finally {
+    assistantBubble.classList.remove("streaming-cursor");
+    document.getElementById("btnSendChat").style.display = "inline-flex";
+    document.getElementById("btnStopChat").style.display = "none";
+    activeChatAbort = null;
+  }
+}
+
+function stopChatStream() {
+  if (activeChatAbort) {
+    activeChatAbort.abort();
+  }
+}
+
+function appendMessageUI(role, text, isStreaming = false) {
+  const cont = document.getElementById("chatMessages");
+  const div = document.createElement("div");
+  div.className = `chat-msg ${role}` + (isStreaming ? " streaming-cursor" : "");
+  div.innerHTML = `
+    <div class="meta">
+      <span>${role.toUpperCase()}</span>
+      <span class="meta-model" style="font-size:10px; color:var(--muted)"></span>
+    </div>
+    <div class="md">${text ? DOMPurify.sanitize(marked.parse(text)) : ''}</div>
+  `;
+  cont.appendChild(div);
+  cont.scrollTop = cont.scrollHeight;
+  return div;
+}
+
+document.getElementById("chatInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendChatMessage();
+  }
+});
+
+// Image Generation
+async function generateImage() {
+  const prompt = document.getElementById("imgPrompt").value.trim();
+  if (!prompt) {
+    showToast("Enter an image prompt", true);
+    return;
+  }
+  const model = document.getElementById("imgModel").value;
+  const size = document.getElementById("imgSize").value;
+  const container = document.getElementById("imgResultContainer");
+  const btn = document.getElementById("btnGenImage");
+
+  btn.disabled = true;
+  btn.innerText = "Generating (~10-25s)...";
+  container.innerHTML = '<span style="color:var(--accent)">⏳ Requesting Qwen t2i generation...</span>';
+
+  try {
+    const headers = { "Content-Type": "application/json" };
+    if (currentApiKey) headers["Authorization"] = `Bearer ${currentApiKey}`;
+
+    const res = await fetch("/v1/images/generations", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ prompt, model, aspect_ratio: size })
+    });
+    const d = await res.json();
+    if (res.ok && d.data && d.data[0]?.url) {
+      const url = d.data[0].url;
+      container.innerHTML = `
+        <div style="text-align:center; padding:10px;">
+          <img src="${url}" style="max-width:100%; max-height:420px; border-radius:6px; box-shadow:var(--shadow);" />
+          <div style="margin-top:10px;">
+            <a href="${url}" target="_blank" download class="sm" style="display:inline-block; padding:4px 10px; background:var(--elev); border:1px solid var(--border); border-radius:4px;">Open Full Resolution &darr;</a>
+          </div>
+        </div>
+      `;
+      showToast("Image generated successfully!");
+    } else {
+      container.innerHTML = `<span style="color:var(--err)">Error: ${d.detail || d.error?.message || 'Failed to generate'}</span>`;
+    }
+  } catch (e) {
+    container.innerHTML = `<span style="color:var(--err)">Network error: ${e.message}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerText = "Generate Image";
+  }
+}
+
+// Initial initialization
+loadStatus();
+loadModels();
+setInterval(loadStatus, 15000);
+</script>
+</body>
+</html>
