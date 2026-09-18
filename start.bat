@@ -27,13 +27,21 @@ if %errorlevel% neq 0 (
     set "PY_CMD=python"
 )
 
-REM 2. Create virtual environment if missing
-if not exist ".venv" (
-    echo [*] Creating virtual environment (.venv)...
-    %PY_CMD% -m venv .venv
+REM 2. Check virtual environment or system packages
+if exist ".venv\Scripts\activate.bat" (
+    call .venv\Scripts\activate.bat
+    set "ACTUAL_PY=python"
+) else (
+    %PY_CMD% -c "import fastapi, uvicorn, playwright, cryptography" >nul 2>nul
+    if %errorlevel% equ 0 (
+        set "ACTUAL_PY=%PY_CMD%"
+    ) else (
+        echo [*] Creating virtual environment (.venv)...
+        %PY_CMD% -m venv .venv
+        call .venv\Scripts\activate.bat
+        set "ACTUAL_PY=python"
+    )
 )
-
-call .venv\Scripts\activate.bat
 
 REM 3. Create .env if missing
 if not exist ".env" (
@@ -44,13 +52,13 @@ if not exist ".env" (
 )
 
 REM 4. Check dependencies
-python -c "import fastapi, uvicorn, playwright, cryptography" >nul 2>nul
+%ACTUAL_PY% -c "import fastapi, uvicorn, playwright, cryptography" >nul 2>nul
 if %errorlevel% neq 0 (
     echo [*] Installing dependencies from requirements.txt...
-    python -m pip install --upgrade pip
-    python -m pip install -r requirements.txt
+    %ACTUAL_PY% -m pip install --upgrade pip
+    %ACTUAL_PY% -m pip install -r requirements.txt
     echo [*] Installing Playwright Chromium browser...
-    playwright install chromium
+    %ACTUAL_PY% -m playwright install chromium
 )
 
 set PORT=8000
@@ -67,5 +75,5 @@ echo ========================================================
 
 start "" "http://localhost:%PORT%/dashboard"
 
-uvicorn app.main:app --host 0.0.0.0 --port %PORT%
+%ACTUAL_PY% -m uvicorn app.main:app --host 0.0.0.0 --port %PORT%
 pause

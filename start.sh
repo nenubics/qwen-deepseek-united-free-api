@@ -26,14 +26,18 @@ fi
 
 echo "✓ Using Python: $($PYTHON_BIN --version)"
 
-# 2. Check or create virtual environment
-if [ ! -d ".venv" ]; then
-    echo "📦 Creating virtual environment (.venv)..."
+# 2. Check virtual environment or system packages
+if [ -d ".venv" ]; then
+    source .venv/bin/activate
+    ACTUAL_PY="python"
+elif $PYTHON_BIN -c "import fastapi, uvicorn, playwright, cryptography" &>/dev/null; then
+    ACTUAL_PY="$PYTHON_BIN"
+else
+    echo "📦 Setting up virtual environment (.venv)..."
     $PYTHON_BIN -m venv .venv
+    source .venv/bin/activate
+    ACTUAL_PY="python"
 fi
-
-# Activate virtual environment
-source .venv/bin/activate
 
 # 3. Check / copy .env
 if [ ! -f ".env" ]; then
@@ -44,12 +48,12 @@ if [ ! -f ".env" ]; then
 fi
 
 # 4. Install dependencies if not already installed
-if ! python -c "import fastapi, uvicorn, playwright, cryptography" &>/dev/null; then
+if ! $ACTUAL_PY -c "import fastapi, uvicorn, playwright, cryptography" &>/dev/null; then
     echo "📥 Installing dependencies from requirements.txt..."
-    pip install --upgrade pip
-    pip install -r requirements.txt
+    $ACTUAL_PY -m pip install --upgrade pip
+    $ACTUAL_PY -m pip install -r requirements.txt
     echo "🌐 Installing Playwright Chromium browser..."
-    playwright install chromium
+    $ACTUAL_PY -m playwright install chromium
 fi
 
 # 5. Extract PORT from .env or default to 8000
@@ -80,4 +84,4 @@ echo "  Press Ctrl+C to stop the server."
 echo "========================================================"
 
 # 7. Start Uvicorn Server
-exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"
+exec "$ACTUAL_PY" -m uvicorn app.main:app --host 0.0.0.0 --port "$PORT"
